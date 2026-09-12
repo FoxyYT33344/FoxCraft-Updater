@@ -27,7 +27,7 @@ public class FoxCraftLauncher extends JFrame {
     // LIVE LAUNCHER VERSION
     // ============================================================
 
-    public static final String LAUNCHER_VERSION = "1.0.0";
+    public static final String LAUNCHER_VERSION = "1.1.0";
 
     // ============================================================
     // GITHUB
