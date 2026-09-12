@@ -21,7 +21,7 @@ public class FoxCraft extends JFrame {
 
     // Muss zu deinem GitHub-Repository passen.
     static final String GITHUB_OWNER = "FoxyYT33344";
-    static final String GITHUB_REPOSITORY = "FoxCraft";
+    static final String GITHUB_REPOSITORY = "FoxCraft-Updater";
     static final String GITHUB_BRANCH = "main";
 
 
