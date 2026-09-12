@@ -15,15 +15,14 @@ import java.util.TimerTask;
 /**
  * FoxCraft Launcher
  *
- * Der Launcher prüft beim Start eine GitHub-version.txt. Wenn die
- * GitHub-Version höher ist, lädt er FoxCraft.java und FoxCraftLauncher.java
- * herunter, kompiliert die Dateien und startet die aktualisierte Version.
+ * Der Launcher liest die Versionen direkt aus den Java-Dateien auf GitHub.
  *
- * GitHub vorbereiten:
- *   1. version.txt ins Repository legen, z.B. 1.1.0
- *   2. FoxCraft.java hochladen
- *   3. FoxCraftLauncher.java hochladen
- *   4. GITHUB_OWNER / GITHUB_REPOSITORY / GITHUB_BRANCH anpassen
+ * FoxCraft.java enthält FOXCRAFT_VERSION = die LIVE-SPIELVERSION.
+ * FoxCraftLauncher.java enthält LAUNCHER_VERSION = die LAUNCHER-VERSION.
+ *
+ * Der Launcher prüft beide Versionen. Wenn die GitHub-Spielversion oder
+ * die GitHub-Launcher-Version höher ist, werden die aktuellen Java-Dateien
+ * heruntergeladen, kompiliert und der aktualisierte Launcher gestartet.
  */
 public class FoxCraftLauncher extends JFrame {
 
@@ -43,8 +42,7 @@ public class FoxCraftLauncher extends JFrame {
                     + GITHUB_REPOSITORY + "/"
                     + GITHUB_BRANCH + "/";
 
-    private static final String VERSION_URL = RAW_BASE + "version.txt";
-    private static final String GAME_SOURCE_URL = RAW_BASE + "FoxCraft.java";
+        private static final String GAME_SOURCE_URL = RAW_BASE + "FoxCraft.java";
     private static final String LAUNCHER_SOURCE_URL = RAW_BASE + "FoxCraftLauncher.java";
 
     private static final String UPDATED_LAUNCHER_FLAG = "--foxcraft-updated-launcher";
@@ -112,7 +110,7 @@ public class FoxCraftLauncher extends JFrame {
         setContentPane(root);
     }
 
-    /** Prüft GitHub und startet danach das Spiel. */
+    /** Prüft beide Live-Versionen auf GitHub und startet danach das Spiel. */
     public void checkForUpdatesThenStart(String[] args) {
         boolean alreadyUpdated = false;
         for (String arg : args) {
@@ -131,23 +129,31 @@ public class FoxCraftLauncher extends JFrame {
 
         Thread t = new Thread(() -> {
             try {
-                String remoteVersion = downloadText(VERSION_URL).trim();
-                if (remoteVersion.isEmpty()) {
-                    SwingUtilities.invokeLater(() -> {
-                        statusLabel.setText("Keine Versionsdatei gefunden.");
-                        startCountdown();
-                    });
-                    return;
-                }
+                String remoteGameSource = downloadText(GAME_SOURCE_URL);
+                String remoteLauncherSource = downloadText(LAUNCHER_SOURCE_URL);
 
-                int cmp = compareVersions(remoteVersion, LAUNCHER_VERSION);
-                if (cmp > 0) {
-                    SwingUtilities.invokeLater(() -> statusLabel.setText(
-                            "Update gefunden: " + LAUNCHER_VERSION + " → " + remoteVersion));
-                    performUpdateAndRestart(remoteVersion);
+                String remoteGameVersion = extractVersion(remoteGameSource, "FOXCRAFT_VERSION");
+                String remoteLauncherVersion = extractVersion(remoteLauncherSource, "LAUNCHER_VERSION");
+
+                boolean gameUpdate = compareVersions(remoteGameVersion, getLocalGameVersion()) > 0;
+                boolean launcherUpdate = compareVersions(remoteLauncherVersion, LAUNCHER_VERSION) > 0;
+
+                if (gameUpdate || launcherUpdate) {
+                    StringBuilder msg = new StringBuilder("Update gefunden: ");
+                    if (gameUpdate) {
+                        msg.append("FoxCraft ").append(getLocalGameVersion())
+                           .append(" → ").append(remoteGameVersion);
+                    }
+                    if (launcherUpdate) {
+                        if (gameUpdate) msg.append(" | ");
+                        msg.append("Launcher ").append(LAUNCHER_VERSION)
+                           .append(" → ").append(remoteLauncherVersion);
+                    }
+                    SwingUtilities.invokeLater(() -> statusLabel.setText(msg.toString()));
+                    performUpdateAndRestart(remoteGameVersion, remoteLauncherVersion);
                 } else {
                     SwingUtilities.invokeLater(() -> {
-                        statusLabel.setText("FoxCraft ist aktuell.");
+                        statusLabel.setText("FoxCraft und Launcher sind aktuell.");
                         startCountdown();
                     });
                 }
@@ -160,6 +166,91 @@ public class FoxCraftLauncher extends JFrame {
         }, "FoxCraft-Update-Check");
         t.setDaemon(true);
         t.start();
+    }
+
+    private String getLocalGameVersion() {
+        return extractVersionFromClassSourceOrDefault("FoxCraft.java", "FOXCRAFT_VERSION", "1.0.0");
+    }
+
+    private static String extractVersionFromClassSourceOrDefault(String fileName, String constantName, String fallback) {
+        try {
+            Path file = new File(System.getProperty("user.dir"), fileName).toPath();
+            if (Files.exists(file)) {
+                return extractVersion(Files.readString(file, StandardCharsets.UTF_8), constantName);
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
+    }
+
+    private void performUpdateAndRestart(String remoteGameVersion, String remoteLauncherVersion) {
+        Thread updater = new Thread(() -> {
+            try {
+                Path appDir = new File(System.getProperty("user.dir")).toPath();
+                Path updateDir = appDir.resolve("FoxCraftUpdate");
+                Path updateClasses = updateDir.resolve("classes");
+                Files.createDirectories(updateClasses);
+
+                Path launcherSource = updateDir.resolve("FoxCraftLauncher.java");
+                Path gameSource = updateDir.resolve("FoxCraft.java");
+
+                downloadToFile(LAUNCHER_SOURCE_URL, launcherSource);
+                downloadToFile(GAME_SOURCE_URL, gameSource);
+
+                SwingUtilities.invokeLater(() -> statusLabel.setText(
+                        "Update wird kompiliert ... FoxCraft " + remoteGameVersion
+                                + " | Launcher " + remoteLauncherVersion));
+
+                JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+                if (compiler == null) {
+                    throw new IllegalStateException(
+                            "Kein Java-Compiler gefunden. Bitte eine JDK-Version verwenden.");
+                }
+
+                int result = compiler.run(
+                        null, null, null,
+                        "-encoding", "UTF-8",
+                        "-d", updateClasses.toString(),
+                        launcherSource.toString(),
+                        gameSource.toString()
+                );
+
+                if (result != 0) {
+                    throw new IllegalStateException("Das Update konnte nicht kompiliert werden.");
+                }
+
+                SwingUtilities.invokeLater(() -> statusLabel.setText(
+                        "Update fertig – Launcher wird neu gestartet ..."));
+
+                String javaExecutable = getJavaExecutable();
+                ProcessBuilder builder = new ProcessBuilder(
+                        javaExecutable,
+                        "-cp",
+                        updateClasses.toString(),
+                        "FoxCraftLauncher",
+                        UPDATED_LAUNCHER_FLAG
+                );
+                builder.directory(appDir.toFile());
+                builder.inheritIO();
+                builder.start();
+
+                Thread.sleep(250);
+                System.exit(0);
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    statusLabel.setText("Update fehlgeschlagen.");
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Das FoxCraft-Update konnte nicht installiert werden.\n\n" + ex.getMessage(),
+                            "FoxCraft Launcher",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    startCountdown();
+                });
+            }
+        }, "FoxCraft-Updater");
+        updater.setDaemon(true);
+        updater.start();
     }
 
     /** Lädt die beiden Java-Dateien, kompiliert sie und startet den neuen Launcher. */
@@ -304,9 +395,18 @@ public class FoxCraftLauncher extends JFrame {
             Path launcherSource = updateDir.resolve("FoxCraftLauncher.java");
             Path gameSource = updateDir.resolve("FoxCraft.java");
 
-            String remoteVersion = downloadTextStatic(VERSION_URL).trim();
-            if (remoteVersion.isEmpty()) {
-                throw new IOException("GitHub version.txt ist leer.");
+            String remoteLauncherSource = downloadTextStatic(LAUNCHER_SOURCE_URL);
+            String remoteLauncherVersion = extractVersion(remoteLauncherSource, "LAUNCHER_VERSION");
+
+            if (compareVersions(remoteLauncherVersion, LAUNCHER_VERSION) <= 0) {
+                JOptionPane.showMessageDialog(
+                        parent,
+                        "Der FoxCraft Launcher ist bereits aktuell.\n\n"
+                                + "Launcher-Version: " + LAUNCHER_VERSION,
+                        "FoxCraft Launcher Update",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+                return false;
             }
 
             downloadToFileStatic(LAUNCHER_SOURCE_URL, launcherSource);
@@ -319,9 +419,7 @@ public class FoxCraftLauncher extends JFrame {
             }
 
             int result = compiler.run(
-                    null,
-                    null,
-                    null,
+                    null, null, null,
                     "-encoding", "UTF-8",
                     "-d", updateClasses.toString(),
                     launcherSource.toString(),
@@ -331,12 +429,6 @@ public class FoxCraftLauncher extends JFrame {
             if (result != 0) {
                 throw new IllegalStateException("Die neue FoxCraft-Version konnte nicht kompiliert werden.");
             }
-
-            Files.writeString(
-                    appDir.resolve("version.txt"),
-                    remoteVersion,
-                    StandardCharsets.UTF_8
-            );
 
             ProcessBuilder builder = new ProcessBuilder(
                     getJavaExecutableStatic(),
@@ -361,8 +453,32 @@ public class FoxCraftLauncher extends JFrame {
     }
 
     public static boolean hasGitHubUpdate() throws IOException {
-        String remote = downloadTextStatic(VERSION_URL).trim();
-        return compareVersions(remote, LAUNCHER_VERSION) > 0;
+        String remoteSource = downloadTextStatic(LAUNCHER_SOURCE_URL);
+        String remoteVersion = extractVersion(remoteSource, "LAUNCHER_VERSION");
+        return compareVersions(remoteVersion, LAUNCHER_VERSION) > 0;
+    }
+
+    public static String getGitHubGameVersion() throws IOException {
+        String remoteSource = downloadTextStatic(GAME_SOURCE_URL);
+        return extractVersion(remoteSource, "FOXCRAFT_VERSION");
+    }
+
+    private static String extractVersion(String source, String constantName) throws IOException {
+        String marker = constantName + " = \"";
+        int index = source.indexOf(marker);
+        if (index < 0) {
+            throw new IOException("Die Version " + constantName + " wurde im GitHub-Code nicht gefunden.");
+        }
+        int start = index + marker.length();
+        int end = source.indexOf('"', start);
+        if (end < 0) {
+            throw new IOException("Ungültige Version für " + constantName + ".");
+        }
+        String version = source.substring(start, end).trim();
+        if (version.isEmpty()) {
+            throw new IOException("Version " + constantName + " ist leer.");
+        }
+        return version;
     }
 
     private static String downloadTextStatic(String urlString) throws IOException {
@@ -431,6 +547,10 @@ public class FoxCraftLauncher extends JFrame {
             }
         }
         return 0;
+    }
+
+    public static int compareVersionsPublic(String a, String b) {
+        return compareVersions(a, b);
     }
 
     private static int parseVersionPart(String value) {
