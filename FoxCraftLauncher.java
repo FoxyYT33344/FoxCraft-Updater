@@ -33,17 +33,16 @@ public class FoxCraftLauncher extends JFrame {
     // ============================================================
 
     public static final String GITHUB_OWNER = "FoxyYT33344";
-    public static final String GITHUB_REPOSITORY = "FoxCraft";
+    public static final String GITHUB_REPOSITORY = "FoxCraft-Updater";
     public static final String GITHUB_BRANCH = "main";
 
-    private static final String RAW_BASE =
-            "https://raw.githubusercontent.com/"
-                    + GITHUB_OWNER + "/"
-                    + GITHUB_REPOSITORY + "/"
-                    + GITHUB_BRANCH + "/";
+    // Die GitHub-BLOB-Links werden für Downloads auf die RAW-Links umgewandelt.
+    // Das ist wichtig, weil GitHub auf /blob/ HTML ausliefert und nicht den Java-Quelltext.
+    private static final String GAME_SOURCE_URL =
+            "https://raw.githubusercontent.com/FoxyYT33344/FoxCraft-Updater/main/FoxCraft.java";
 
-        private static final String GAME_SOURCE_URL = RAW_BASE + "FoxCraft.java";
-    private static final String LAUNCHER_SOURCE_URL = RAW_BASE + "FoxCraftLauncher.java";
+    private static final String LAUNCHER_SOURCE_URL =
+            "https://raw.githubusercontent.com/FoxyYT33344/FoxCraft-Updater/main/FoxCraftLauncher.java";
 
     private static final String UPDATED_LAUNCHER_FLAG = "--foxcraft-updated-launcher";
     private static final String GAME_LAUNCHER_TOKEN = "FOXCRAFT_LAUNCHER_START_2026";
