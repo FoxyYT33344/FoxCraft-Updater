@@ -17,7 +17,7 @@ public class FoxCraft extends JFrame {
     // VERSION / LAUNCHER UPDATE
     // ============================================================
 
-    static final String FOXCRAFT_VERSION = "1.0.0";
+    static final String FOXCRAFT_VERSION = "1.1.0";
 
     // Muss zu deinem GitHub-Repository passen.
     static final String GITHUB_OWNER = "FoxyYT33344";
