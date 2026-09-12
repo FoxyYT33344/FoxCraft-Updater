@@ -17,7 +17,7 @@ public class FoxCraft extends JFrame {
     // VERSION / LAUNCHER UPDATE
     // ============================================================
 
-    static final String FOXCRAFT_VERSION = "1.1.0";
+    static final String FOXCRAFT_VERSION = "1.0.0";
 
     // Muss zu deinem GitHub-Repository passen.
     static final String GITHUB_OWNER = "FoxyYT33344";
@@ -1008,11 +1008,6 @@ public class FoxCraft extends JFrame {
                             "CHARAKTER"
                     );
 
-            JButton updateLauncher =
-                    createButton(
-                            "FOXCRAFT LAUNCHER UPDATE"
-                    );
-
             JButton exit =
                     createButton(
                             "BEENDEN"
@@ -1050,14 +1045,6 @@ public class FoxCraft extends JFrame {
                     )
             );
 
-            center.add(updateLauncher);
-
-            center.add(
-                    Box.createVerticalStrut(
-                            10
-                    )
-            );
-
             center.add(exit);
 
             center.add(
@@ -1087,58 +1074,10 @@ public class FoxCraft extends JFrame {
                     )
             );
 
-            updateLauncher.addActionListener(
-                    e -> updateLauncherFromGame()
-            );
-
             exit.addActionListener(
                     e -> System.exit(0)
             );
         }
-    }
-
-    private void updateLauncherFromGame() {
-        int answer = JOptionPane.showConfirmDialog(
-                this,
-                "FoxCraft Launcher von GitHub nach Updates prüfen?\n\n"
-                        + "Aktuelle FoxCraft-Version: " + FOXCRAFT_VERSION,
-                "FoxCraft Launcher Update",
-                JOptionPane.YES_NO_OPTION
-        );
-
-        if (answer != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        Thread thread = new Thread(() -> {
-            try {
-                boolean updateAvailable = FoxCraftLauncher.hasGitHubUpdate();
-                SwingUtilities.invokeLater(() -> {
-                    if (updateAvailable) {
-                        boolean started = FoxCraftLauncher.updateLauncherFromGitHubAndRestart(this);
-                        if (started) {
-                            dispose();
-                        }
-                    } else {
-                        JOptionPane.showMessageDialog(
-                                this,
-                                "Der FoxCraft Launcher ist bereits aktuell.",
-                                "FoxCraft Launcher Update",
-                                JOptionPane.INFORMATION_MESSAGE
-                        );
-                    }
-                });
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                        this,
-                        "GitHub konnte nicht erreicht werden.\n\n" + ex.getMessage(),
-                        "FoxCraft Launcher Update",
-                        JOptionPane.ERROR_MESSAGE
-                ));
-            }
-        }, "FoxCraft-Ingame-Updater");
-        thread.setDaemon(true);
-        thread.start();
     }
 
     // ============================================================
